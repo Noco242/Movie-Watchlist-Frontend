@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TmdbService } from '../../core/services/tmdb.service';
 import { WatchlistItem } from '../../core/models/watchlist-item.model';
@@ -15,13 +15,17 @@ import { WatchlistService } from '../../core/services/watchlist.service';
       <p>Verwalte hier deine Titel, Status, Bewertung und Notizen.</p>
     </section>
 
-    @if (items().length === 0) {
-      <p class="leer">Noch keine Eintraege. Fuege zuerst Titel unter "Entdecken" hinzu.</p>
+    @if (isLoading()) {
+      <p class="hinweis">Wird geladen...</p>
+    } @else if (error()) {
+      <p class="fehler">{{ error() }}</p>
+    } @else if (items().length === 0) {
+      <p class="leer">Noch keine Einträge. Füge zuerst Titel unter "Entdecken" hinzu.</p>
     } @else {
       <div class="liste">
         @for (item of items(); track item.id) {
           <article class="eintrag">
-            <img [src]="imageFor(item.posterPath) || fallbackPoster" [alt]="item.title" />
+            <img [src]="imageFor(item.poster_path) || fallbackPoster" [alt]="item.title" />
 
             <div class="details">
               <h2>{{ item.title }}</h2>
@@ -84,6 +88,18 @@ import { WatchlistService } from '../../core/services/watchlist.service';
       padding: 1rem;
       border: 1px dashed #4b4b4b;
       border-radius: 8px;
+    }
+
+    .hinweis {
+      color: #c9c9c9;
+    }
+
+    .fehler {
+      color: #ffc6ca;
+      padding: 1rem;
+      border: 1px solid #c41e3a;
+      border-radius: 8px;
+      background: rgba(196, 30, 58, 0.1);
     }
 
     .liste {
@@ -162,31 +178,73 @@ import { WatchlistService } from '../../core/services/watchlist.service';
     }
   `
 })
-export class WatchlistPageComponent {
+export class WatchlistPageComponent implements OnInit {
   private readonly watchlistService = inject(WatchlistService);
   private readonly tmdbService = inject(TmdbService);
 
   protected readonly fallbackPoster =
     'https://placehold.co/500x750/151515/f2f2f2?text=Kein+Poster';
 
-  protected readonly items = this.watchlistService.userItems;
+  protected readonly items = signal<WatchlistItem[]>([]);
+  protected readonly isLoading = signal(false);
+  protected readonly error = signal('');
+
+  ngOnInit(): void {
+    this.loadWatchlist();
+  }
+
+  private loadWatchlist(): void {
+    this.isLoading.set(true);
+    this.error.set('');
+    this.watchlistService.getWatchlist().subscribe({
+      next: (items) => {
+        this.items.set(items);
+        this.isLoading.set(false);
+      },
+      error: (error) => {
+        this.isLoading.set(false);
+        if (error.status === 401) {
+          this.error.set('Bitte melde dich an, um deine Watchlist zu sehen.');
+        } else {
+          this.error.set('Fehler beim Laden der Watchlist. Versuche es später erneut.');
+        }
+      }
+    });
+  }
 
   protected remove(item: WatchlistItem): void {
-    this.watchlistService.removeItem(item.id);
+    if (confirm(`"${item.title}" aus Watchlist entfernen?`)) {
+      this.watchlistService.removeFromWatchlist(item.id).subscribe({
+        next: () => {
+          this.loadWatchlist();
+        },
+        error: () => {
+          this.error.set('Fehler beim Löschen. Versuche es später erneut.');
+        }
+      });
+    }
   }
 
   protected onSeenChanged(item: WatchlistItem, value: boolean): void {
-    this.watchlistService.updateItem(item.id, { gesehen: value });
+    this.updateItem(item.id, { gesehen: value });
   }
 
   protected onRatingChanged(item: WatchlistItem, value: string | number): void {
     const parsed = Number(value);
     const bewertung = Number.isFinite(parsed) ? Math.max(0, Math.min(10, parsed)) : 0;
-    this.watchlistService.updateItem(item.id, { bewertung });
+    this.updateItem(item.id, { bewertung });
   }
 
   protected onNoteChanged(item: WatchlistItem, value: string): void {
-    this.watchlistService.updateItem(item.id, { notiz: value.slice(0, 400) });
+    this.updateItem(item.id, { notiz: value.slice(0, 400) });
+  }
+
+  private updateItem(id: number, changes: Partial<Pick<WatchlistItem, 'gesehen' | 'bewertung' | 'notiz'>>): void {
+    this.watchlistService.updateWatchlistItem(id, changes).subscribe({
+      error: () => {
+        this.error.set('Fehler beim Speichern. Versuche es später erneut.');
+      }
+    });
   }
 
   protected imageFor(path: string | null): string {

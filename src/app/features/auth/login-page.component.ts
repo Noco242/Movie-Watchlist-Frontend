@@ -13,15 +13,17 @@ import { AuthService } from '../../core/services/auth.service';
       <p>Melde dich an, um deine Watchlist zu verwalten.</p>
 
       <label for="email">E-Mail</label>
-      <input id="email" name="email" type="email" [(ngModel)]="email" />
+      <input id="email" name="email" type="email" [(ngModel)]="email" [disabled]="isLoading()" />
 
       <label for="password">Passwort</label>
-      <input id="password" name="password" type="password" [(ngModel)]="password" />
+      <input id="password" name="password" type="password" [(ngModel)]="password" [disabled]="isLoading()" />
 
-      <button type="button" (click)="submit()">Einloggen</button>
+      <button type="button" (click)="submit()" [disabled]="isLoading()">
+        {{ isLoading() ? 'wird eingeloggt...' : 'Einloggen' }}
+      </button>
 
       @if (message()) {
-        <p class="meldung">{{ message() }}</p>
+        <p class="meldung" [class.fehler]="isError()">{{ message() }}</p>
       }
 
       <a routerLink="/register">Noch kein Konto? Jetzt registrieren</a>
@@ -59,6 +61,11 @@ import { AuthService } from '../../core/services/auth.service';
       padding: 0 0.7rem;
     }
 
+    input:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
     button {
       margin-top: 0.5rem;
       min-height: 42px;
@@ -70,9 +77,19 @@ import { AuthService } from '../../core/services/auth.service';
       cursor: pointer;
     }
 
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
     .meldung {
-      color: #ffc6ca;
+      color: #97d397;
       margin-top: 0.4rem;
+      font-size: 0.9rem;
+    }
+
+    .meldung.fehler {
+      color: #ffc6ca;
     }
 
     a {
@@ -89,17 +106,38 @@ export class LoginPageComponent {
   protected email = '';
   protected password = '';
   protected readonly message = signal('');
+  protected readonly isLoading = signal(false);
+  protected readonly isError = signal(false);
 
   protected submit(): void {
     this.message.set('');
+    this.isError.set(false);
 
-    const result = this.authService.login(this.email, this.password);
-    if (!result.success) {
-      this.message.set(result.message);
+    if (!this.email.trim() || !this.password.trim()) {
+      this.message.set('Bitte E-Mail und Passwort eingeben.');
+      this.isError.set(true);
       return;
     }
 
-    this.router.navigateByUrl('/watchlist');
+    this.isLoading.set(true);
+    this.authService.login(this.email.trim(), this.password).subscribe({
+      next: () => {
+        this.message.set('Login erfolgreich!');
+        this.isError.set(false);
+        setTimeout(() => this.router.navigateByUrl('/watchlist'), 500);
+      },
+      error: (error) => {
+        this.isLoading.set(false);
+        if (error.status === 401) {
+          this.message.set('E-Mail oder Passwort ungültig.');
+        } else if (error.status === 422) {
+          this.message.set('Validierungsfehler. Überprüfe deine Eingaben.');
+        } else {
+          this.message.set('Login fehlgeschlagen. Versuche es später erneut.');
+        }
+        this.isError.set(true);
+      }
+    });
   }
 }
 

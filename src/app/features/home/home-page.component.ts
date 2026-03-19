@@ -260,8 +260,27 @@ export class HomePageComponent implements OnInit {
       return;
     }
 
-    const result = this.watchlistService.addFromTmdb(item);
-    this.watchlistMessage.set(result.message);
+    const watchlistItem = {
+      tmdb_id: item.id,
+      title: item.title,
+      type: item.mediaType,
+      poster_path: item.posterPath,
+      jahr: this.yearNumberFrom(item.releaseDate)
+    };
+
+    this.watchlistService.addToWatchlist(watchlistItem).subscribe({
+      next: () => {
+        this.watchlistMessage.set('✓ Zur Watchlist hinzugefügt!');
+        setTimeout(() => this.watchlistMessage.set(''), 3000);
+      },
+      error: (error) => {
+        if (error.status === 409) {
+          this.watchlistMessage.set('Titel ist bereits in deiner Watchlist.');
+        } else {
+          this.watchlistMessage.set('Fehler beim Hinzufügen. Versuche es später erneut.');
+        }
+      }
+    });
   }
 
   protected imageFor(path: string | null): string {
@@ -274,6 +293,15 @@ export class HomePageComponent implements OnInit {
     }
 
     return dateValue.slice(0, 4);
+  }
+
+  private yearNumberFrom(dateValue: string | null): number | null {
+    if (!dateValue) {
+      return null;
+    }
+
+    const parsed = Number(dateValue.slice(0, 4));
+    return Number.isFinite(parsed) ? parsed : null;
   }
 }
 

@@ -1,10 +1,7 @@
 export interface AppUser {
-  id: string;
+  id: number;
   name: string;
   email: string;
-}
-
-export interface StoredUser extends AppUser {
-  password: string;
+  created_at?: string;
 }
 

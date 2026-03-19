@@ -10,24 +10,26 @@ import { AuthService } from '../../core/services/auth.service';
   template: `
     <section class="auth-card">
       <h1>Registrieren</h1>
-      <p>Erstelle ein Konto fuer deine persoenliche Watchlist.</p>
+      <p>Erstelle ein Konto für deine persönliche Watchlist.</p>
 
       <label for="name">Name</label>
-      <input id="name" name="name" type="text" [(ngModel)]="name" />
+      <input id="name" name="name" type="text" [(ngModel)]="name" [disabled]="isLoading()" />
 
       <label for="email">E-Mail</label>
-      <input id="email" name="email" type="email" [(ngModel)]="email" />
+      <input id="email" name="email" type="email" [(ngModel)]="email" [disabled]="isLoading()" />
 
       <label for="password">Passwort</label>
-      <input id="password" name="password" type="password" [(ngModel)]="password" />
+      <input id="password" name="password" type="password" [(ngModel)]="password" [disabled]="isLoading()" />
 
       <label for="passwordRepeat">Passwort wiederholen</label>
-      <input id="passwordRepeat" name="passwordRepeat" type="password" [(ngModel)]="passwordRepeat" />
+      <input id="passwordRepeat" name="passwordRepeat" type="password" [(ngModel)]="passwordRepeat" [disabled]="isLoading()" />
 
-      <button type="button" (click)="submit()">Registrieren</button>
+      <button type="button" (click)="submit()" [disabled]="isLoading()">
+        {{ isLoading() ? 'wird registriert...' : 'Registrieren' }}
+      </button>
 
       @if (message()) {
-        <p class="meldung">{{ message() }}</p>
+        <p class="meldung" [class.fehler]="isError()">{{ message() }}</p>
       }
 
       <a routerLink="/login">Schon ein Konto? Zum Login</a>
@@ -65,6 +67,11 @@ import { AuthService } from '../../core/services/auth.service';
       padding: 0 0.7rem;
     }
 
+    input:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
     button {
       margin-top: 0.5rem;
       min-height: 42px;
@@ -76,9 +83,19 @@ import { AuthService } from '../../core/services/auth.service';
       cursor: pointer;
     }
 
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
     .meldung {
-      color: #ffc6ca;
+      color: #97d397;
       margin-top: 0.4rem;
+      font-size: 0.9rem;
+    }
+
+    .meldung.fehler {
+      color: #ffc6ca;
     }
 
     a {
@@ -97,32 +114,50 @@ export class RegisterPageComponent {
   protected password = '';
   protected passwordRepeat = '';
   protected readonly message = signal('');
+  protected readonly isLoading = signal(false);
+  protected readonly isError = signal(false);
 
   protected submit(): void {
     this.message.set('');
+    this.isError.set(false);
 
     if (!this.name.trim() || !this.email.trim() || !this.password.trim()) {
-      this.message.set('Bitte alle Pflichtfelder ausfuellen.');
+      this.message.set('Bitte alle Pflichtfelder ausfüllen.');
+      this.isError.set(true);
       return;
     }
 
     if (this.password.length < 6) {
       this.message.set('Das Passwort muss mindestens 6 Zeichen haben.');
+      this.isError.set(true);
       return;
     }
 
     if (this.password !== this.passwordRepeat) {
-      this.message.set('Die Passwoerter stimmen nicht ueberein.');
+      this.message.set('Die Passwörter stimmen nicht überein.');
+      this.isError.set(true);
       return;
     }
 
-    const result = this.authService.register(this.name, this.email, this.password);
-    if (!result.success) {
-      this.message.set(result.message);
-      return;
-    }
-
-    this.router.navigateByUrl('/watchlist');
+    this.isLoading.set(true);
+    this.authService.register(this.name.trim(), this.email.trim(), this.password).subscribe({
+      next: () => {
+        this.message.set('Registrierung erfolgreich!');
+        this.isError.set(false);
+        setTimeout(() => this.router.navigateByUrl('/watchlist'), 500);
+      },
+      error: (error) => {
+        this.isLoading.set(false);
+        if (error.status === 409) {
+          this.message.set('Diese E-Mail ist bereits registriert.');
+        } else if (error.status === 422) {
+          this.message.set('Validierungsfehler. Überprüfe deine Eingaben.');
+        } else {
+          this.message.set('Registrierung fehlgeschlagen. Versuche es später erneut.');
+        }
+        this.isError.set(true);
+      }
+    });
   }
 }
 

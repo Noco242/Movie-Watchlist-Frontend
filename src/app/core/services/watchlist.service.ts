@@ -1,101 +1,58 @@
-import { Injectable, computed, signal } from '@angular/core';
-import { AuthService } from './auth.service';
-import { TmdbMedia } from '../models/tmdb.model';
-import { WatchlistItem } from '../models/watchlist-item.model';
-
-const WATCHLIST_STORAGE_KEY = 'mw_watchlist_v1';
+import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { BehaviorSubject, Observable } from 'rxjs';
+import { tap } from 'rxjs/operators';
+import { CreateWatchlistItemRequest, WatchlistItem } from '../models/watchlist-item.model';
+import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class WatchlistService {
-  private readonly allItems = signal<WatchlistItem[]>(this.readItems());
-  readonly userItems = computed(() => {
-    const user = this.authService.currentUser();
-    if (!user) {
-      return [];
-    }
+  private readonly apiUrl = `${environment.backendBaseUrl}/watchlist`;
+  private readonly watchlistSubject = new BehaviorSubject<WatchlistItem[]>([]);
+  readonly watchlist$ = this.watchlistSubject.asObservable();
 
-    return this.allItems().filter((item) => item.ownerId === user.id);
-  });
+  constructor(private readonly http: HttpClient) {}
 
-  constructor(private readonly authService: AuthService) {}
-
-  addFromTmdb(media: TmdbMedia): { success: boolean; message: string } {
-    const user = this.authService.currentUser();
-    if (!user) {
-      return { success: false, message: 'Bitte zuerst einloggen.' };
-    }
-
-    const alreadyExists = this.allItems().some(
-      (item) => item.ownerId === user.id && item.tmdbId === media.id && item.type === media.mediaType
+  getWatchlist(): Observable<WatchlistItem[]> {
+    return this.http.get<WatchlistItem[]>(this.apiUrl).pipe(
+      tap((items) => {
+        this.watchlistSubject.next(items);
+      })
     );
-
-    if (alreadyExists) {
-      return { success: false, message: 'Titel ist bereits in deiner Watchlist.' };
-    }
-
-    const newItem: WatchlistItem = {
-      id: crypto.randomUUID(),
-      ownerId: user.id,
-      tmdbId: media.id,
-      title: media.title,
-      type: media.mediaType,
-      gesehen: false,
-      bewertung: 0,
-      notiz: '',
-      posterPath: media.posterPath,
-      jahr: this.extractYear(media.releaseDate),
-      hinzugefuegtAm: new Date().toISOString()
-    };
-
-    const updated = [...this.allItems(), newItem];
-    this.persist(updated);
-    return { success: true, message: 'Zur Watchlist hinzugefügt.' };
   }
 
-  updateItem(id: string, changes: Partial<Pick<WatchlistItem, 'gesehen' | 'bewertung' | 'notiz'>>): void {
-    const updated = this.allItems().map((item) => (item.id === id ? { ...item, ...changes } : item));
-    this.persist(updated);
+  addToWatchlist(item: CreateWatchlistItemRequest): Observable<WatchlistItem> {
+    return this.http.post<WatchlistItem>(this.apiUrl, item).pipe(
+      tap((newItem) => {
+        const current = this.watchlistSubject.value;
+        this.watchlistSubject.next([...current, newItem]);
+      })
+    );
   }
 
-  removeItem(id: string): void {
-    const updated = this.allItems().filter((item) => item.id !== id);
-    this.persist(updated);
+  updateWatchlistItem(
+    id: number,
+    updates: Partial<Pick<WatchlistItem, 'gesehen' | 'bewertung' | 'notiz'>>
+  ): Observable<WatchlistItem> {
+    return this.http.patch<WatchlistItem>(`${this.apiUrl}/${id}`, updates).pipe(
+      tap((updated) => {
+        const current = this.watchlistSubject.value;
+        const index = current.findIndex((item) => item.id === id);
+        if (index !== -1) {
+          current[index] = updated;
+          this.watchlistSubject.next([...current]);
+        }
+      })
+    );
   }
 
-  private extractYear(dateValue: string | null): string {
-    if (!dateValue) {
-      return 'Unbekannt';
-    }
-
-    return dateValue.slice(0, 4);
-  }
-
-  private persist(items: WatchlistItem[]): void {
-    this.allItems.set(items);
-    this.storage()?.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(items));
-  }
-
-  private readItems(): WatchlistItem[] {
-    const raw = this.storage()?.getItem(WATCHLIST_STORAGE_KEY);
-    if (!raw) {
-      return [];
-    }
-
-    try {
-      return JSON.parse(raw) as WatchlistItem[];
-    } catch {
-      this.storage()?.removeItem(WATCHLIST_STORAGE_KEY);
-      return [];
-    }
-  }
-
-  private storage(): Storage | null {
-    const candidate = globalThis.localStorage;
-    if (!candidate || typeof candidate.getItem !== 'function') {
-      return null;
-    }
-
-    return candidate;
+  removeFromWatchlist(id: number): Observable<any> {
+    return this.http.delete(`${this.apiUrl}/${id}`).pipe(
+      tap(() => {
+        const current = this.watchlistSubject.value;
+        this.watchlistSubject.next(current.filter((item) => item.id !== id));
+      })
+    );
   }
 }
 
