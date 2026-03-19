@@ -1,59 +1,58 @@
-# MovieWatchlistFrontend
+# Movie Watchlist Frontend
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 21.2.3.
+Angular-Frontend im Netflix-Design mit deutscher UI, Auth-Demo (Login/Register/Logout), geschuetzter Watchlist und TMDB-Integration (Suche + Trending).
 
-## Development server
+## Features (MVP)
 
-To start a local development server, run:
+- Login, Registrierung und Logout (lokal per `localStorage`, backend-ready vorbereitet)
+- Route-Schutz fuer `Meine Watchlist`
+- TMDB Suche (`/search/multi`) und Trending (`/trending/all/week`)
+- Watchlist-Felder:
+  - `titel`
+  - `typ` (`movie` oder `tv`)
+  - `gesehen`
+  - `bewertung` (0 bis 10)
+  - zusaetzlich: `notiz`, `jahr`, `tmdbId`, `posterPath`, `hinzugefuegtAm`
 
-```bash
-ng serve
-```
+## Lokaler Start
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
-
-## Code scaffolding
-
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
-
-```bash
-ng generate component component-name
-```
-
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+1. Abhaengigkeiten installieren
+2. TMDB API-Key eintragen
+3. App starten
 
 ```bash
-ng generate --help
+npm install
+npm run start
 ```
 
-## Building
+Die App laeuft dann auf `http://localhost:4200`.
 
-To build the project run:
+## TMDB API-Key setzen
+
+Datei: `src/environments/environment.development.ts`
+
+```ts
+apiKey: 'HIER_TMDB_API_KEY_EINTRAGEN'
+```
+
+TMDB-Key erstellen: https://www.themoviedb.org/settings/api
+
+## Build und Tests
 
 ```bash
-ng build
+npm run build
+npm run test
 ```
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+## Geplante Python-Backend-Anbindung
 
-## Running unit tests
+Aktuell ist die Persistenz lokal. Fuer das spaetere Python-Backend ist bereits `backendBaseUrl` vorgesehen:
 
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
+- `src/environments/environment.ts`
+- `src/environments/environment.development.ts`
 
-```bash
-ng test
-```
+Empfohlene naechste Schritte Backend:
 
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+1. FastAPI oder Django REST API mit JWT-Endpunkten (`/auth/register`, `/auth/login`, `/auth/refresh`)
+2. Watchlist-Endpunkte (`GET/POST/PATCH/DELETE /watchlist`)
+3. Frontend-Services von `localStorage` auf HTTP umstellen (gleiche Domainenmodelle bleiben bestehen)
